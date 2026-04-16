@@ -21,6 +21,10 @@
 # price, discounts, industry-wide volume, weather, demographics, and special-day flags.
 
 # %%
+import numpy as np
+import pandas as pd
+
+# %%
 DATA = "data/train/"
 
 historical = pd.read_csv(DATA + "historical_volume.csv")
@@ -58,6 +62,7 @@ df = df.merge(demographics, on="Agency", how="left")
 
 # %%
 from skrub import TableReport
+TableReport(df)
 
 # %% [markdown]
 # ---
@@ -65,8 +70,8 @@ from skrub import TableReport
 
 # %%
 from skrub import TableVectorizer, tabular_pipeline
-
-
+pipeline = tabular_pipeline("regression")
+pipeline
 
 # %% [markdown]
 # ---
@@ -74,8 +79,7 @@ from skrub import TableVectorizer, tabular_pipeline
 # with Cross Validation
 
 # %%
-from skore import CrossValidationReport
-
+from skore import CrossValidationReport, evaluate
 
 # %% [markdown]
 # side by side benchmark, comparison of options (one or two models, with a baseline)
