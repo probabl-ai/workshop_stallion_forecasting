@@ -12,26 +12,6 @@
 #     name: python3
 # ---
 
-# %%
-# Imports
-# basic ones
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-
-# scikit-learn
-from sklearn.ensemble import HistGradientBoostingRegressor, RandomForestRegressor
-from sklearn.linear_model import Ridge
-from sklearn.pipeline import make_pipeline
-from sklearn.model_selection import TimeSeriesSplit
-from sklearn.impute import SimpleImputer
-
-# skrub
-from skrub import TableVectorizer, tabular_pipeline, TableReport
-
-# skore
-from skore import EstimatorReport, CrossValidationReport, ComparisonReport, train_test_split
-
 # %% [markdown]
 # ---
 # ## 1 · Load the Stallion dataset
@@ -39,6 +19,10 @@ from skore import EstimatorReport, CrossValidationReport, ComparisonReport, trai
 # The Stallion dataset records monthly beverage sales across **agencies** (wholesalers /
 # stores) and **SKUs** (products). Each row carries the volume sold plus covariates:
 # price, discounts, industry-wide volume, weather, demographics, and special-day flags.
+
+# %%
+import numpy as np
+import pandas as pd
 
 # %%
 DATA = "data/train/"
@@ -76,33 +60,37 @@ df = df.merge(demographics, on="Agency", how="left")
 # - What does the target look like?
 # - What is the nature of the features? (ordinal, categorical, datetime, text..?)
 
+# %%
+from skrub import TableReport
+TableReport(df)
 
 # %% [markdown]
 # ---
-# ## 3 · Feature engineering 
+# ## 3 · Feature engineering, build & train pipelines
 
 # %%
+from skrub import TableVectorizer, tabular_pipeline
+pipeline = tabular_pipeline("regression")
+pipeline
 
 # %% [markdown]
 # ---
-# ## 4 · Build & train pipelines
-
-# %%
-
-
-# %% [markdown]
-# ---
-# ## 5 · Evaluate with Skore
+# ## 4 · Evaluate with Skore
 # with Cross Validation
 
 # %%
+from skore import CrossValidationReport, evaluate
 
 # %% [markdown]
 # side by side benchmark, comparison of options (one or two models, with a baseline)
 
 # %%
+from skore import ComparisonReport
 
 
 # %% [markdown]
 # Evaluation of chosen model
 # EstimatorReport of a model trained on the whole training set, and tested on Jan 18
+
+# %%
+from skore import ComparisonReport
