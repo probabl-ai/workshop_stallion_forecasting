@@ -1,0 +1,9 @@
+skore
+skrub
+scikit-learn
+pandas
+numpy
+matplotlib
+yfinance
+ipywidgets
+jupytext
