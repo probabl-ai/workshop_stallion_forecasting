@@ -19,7 +19,7 @@ All the necessary libraries are listed in the requirements.
 
 ## Goal
 
-Based on the data from previous months, we want to predict the sales for the following one (testing is for Jan 18 only), for each agency and SKU.
+Based on the data from previous months, we want to predict the sales for the following one (testing is for Jan 2018 only), for each agency and SKU.
 
 ## Dataset fictional context
 
