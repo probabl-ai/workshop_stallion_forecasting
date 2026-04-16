@@ -69,9 +69,9 @@ TableReport(df)
 # ## 3 · Feature engineering, build & train pipelines
 
 # %%
-from skrub import TableVectorizer, tabular_pipeline
-pipeline = tabular_pipeline("regression")
-pipeline
+from skrub import TableVectorizer
+tv = TableVectorizer()
+tv
 
 # %% [markdown]
 # ---
