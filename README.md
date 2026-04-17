@@ -5,17 +5,21 @@ Hands-on experience of skrub, scikit-learn and skore.
 
 This repository contains a draft of python file, that can be converted in to a notebook, to treat the use-case of Stallion. The data comes from this fictional situation described in a [kaggle competition](https://www.kaggle.com/datasets/utathya/future-volume-prediction).
 
+The script contains already some elements, and we invite you to complete it.
+
+### Technical precisions
+
 Thanks to jupytext, transform the python files into notebooks, with the following command:
 
 ```bash
 jupytext --to notebook stallion_volume_forecasting.py
 ```
 
-The script contains already some elements, and we invite you to complete it.
+All the necessary libraries are listed in the requirements.
 
 ## Goal
 
-Based on the data from previous months, we want to predict the sales for the following one.
+Based on the data from previous months, we want to predict the sales for the following one (testing is for Jan 2018 only), for each agency and SKU.
 
 ## Dataset fictional context
 
