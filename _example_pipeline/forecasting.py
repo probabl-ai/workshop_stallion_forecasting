@@ -12,7 +12,7 @@ import polars as pl
 
 
 def project_dir():
-    return Path(__file__).parent
+    return Path(__file__).parent.parent
 
 
 def data_dir():
@@ -20,11 +20,11 @@ def data_dir():
 
 
 def test_data_dir():
-    return data_dir() / "test_8uviCCm"
+    return data_dir() / "test"
 
 
 def train_data_dir():
-    return data_dir() / "train_OwBvO8W"
+    return data_dir() / "train"
 
 
 def results_dir(subdir=None, /):
