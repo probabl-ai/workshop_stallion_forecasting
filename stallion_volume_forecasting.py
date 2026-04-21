@@ -87,6 +87,9 @@ import skrub
 from helpers import add_lagged_volume
 from sklearn.dummy import DummyRegressor
 
+def sort_data(df):
+    return df.sort_values(by = ["Agency", "SKU", "YearMonth"]).reset_index(drop=True)
+
 def make_data_op(regressor=DummyRegressor()):
     """Build a skrub DataOp pipeline for walk-forward volume forecasting.
 
@@ -103,11 +106,10 @@ def make_data_op(regressor=DummyRegressor()):
         ``data``     – DataFrame with YearMonth, Agency, SKU, Volume.
         ``data_dir`` – Path (str or Path) to the folder containing CSV files.
     """
-    data = skrub.var("data")
-    X = data[["YearMonth", "Agency", "SKU"]].skb.mark_as_X()
+    data = skrub.var("data").skb.apply_func(sort_data)
+    X = data[["YearMonth", "Agency", "SKU"]].skb.mark_as_X(cv=Splitter())
     y = data["Volume"].skb.mark_as_y()
     data_dir = skrub.var("data_dir")
-
     features = (
         X.skb.apply_func(add_lagged_volume, data)
         .skb.apply_func(add_demographics, data_dir)
@@ -122,20 +124,14 @@ def make_data_op(regressor=DummyRegressor()):
 
     return features.skb.apply(regressor, y=y)
 
-
 # %%
 from sklearn.ensemble import HistGradientBoostingRegressor
 # DataOp pipeline: sort → lag features → demographics → TableVectorizer → regressor.
 # ``data`` holds the full history so lags are always computed from complete past data,
 # even inside a CV fold where X is restricted to the training rows.
-data_op = make_data_op(HistGradientBoostingRegressor(categorical_features="from_dtype"))
+data_op_hgb = make_data_op(HistGradientBoostingRegressor(categorical_features="from_dtype"))
+data_op_hgb
 
-env = {
-    "data": pd.read_csv(DATA + "historical_volume.csv"),
-    "data_dir": DATA,
-}
-
-data_op
 
 # %% [markdown]
 # ---
@@ -147,53 +143,58 @@ from helpers import Splitter
 
 splitter = Splitter()
 
-# %% [markdown]
-# side by side benchmark, comparison of options (one or two models, with a baseline)
+# %%
+env = {
+    "data": pd.read_csv(DATA + "historical_volume.csv"),
+    "data_dir": DATA,
+}
 
 # %% 
 import skore
 
-rep_5 = skore.evaluate(data_op, data = env, splitter = 0.1)
+report_hgb = skore.evaluate(data_op_hgb, data = env, splitter = splitter)
+report_hgb
+# this cell takes a long time: for cross validation, and for metrics computation.
+
+# %% 
+data_op_dummy = make_data_op()
+
+report_dummy = skore.evaluate(data_op_dummy, data = env, splitter = splitter)
+report_dummy
+# this cell takes a long time: for cross validation, and for metrics computation.
 
 # %%
-rep_own = skore.evaluate(data_op, data = env, splitter = splitter)
+from helpers import PrevMonth
 
-# %%
-cv_results = {
-    name: make_data_op(name).skb.cross_validate(env, cv=splitter, scoring="neg_mean_absolute_error")
-    for name in ["hgb", "prev_month", "dummy"]
-}
+data_op_next_month = make_data_op(PrevMonth())
+report_next_month = skore.evaluate(data_op_next_month, data = env, splitter = splitter)
+report_next_month
+# this cell takes a long time: for cross validation, and for metrics computation.
 
-comparison = (
-    pd.DataFrame({name: -res["test_score"] for name, res in cv_results.items()})
-    .agg(["mean", "std"])
-    .rename(index={"mean": "MAE mean", "std": "MAE std"})
+# %% 
+# let's compare these
+from skore import ComparisonReport
+comparison = ComparisonReport(
+    {
+        "hgb": report_hgb,
+        "prev_month": report_next_month,
+        "dummy": report_dummy,
+    },
+    metrics=["neg_mean_absolute_error"],
 )
 comparison
 
-# %% [markdown]
-# Evaluation of chosen model
-# EstimatorReport of a model trained on the whole training set, and tested on Dec 2017
-
 # %%
+# apply the best pipeline to test set
+# to fill.
 from skore import EstimatorReport
 
-last_month = env["data"]["YearMonth"].max()
-env_train = {"data": env["data"][env["data"]["YearMonth"] < last_month].copy(), "data_dir": DATA}
-env_test  = {"data": env["data"][env["data"]["YearMonth"] == last_month].copy(), "data_dir": DATA}
+# how I would naturally do it.
+DATA_TEST = "data/test/"
+env_test = {
+    "data": pd.read_csv(DATA + "historical_volume.csv"),
+    "data_dir": DATA_TEST,
+}
 
-learner = pred.skb.make_learner().fit(env_train)
-report = EstimatorReport(
-    learner,
-    fit=False,
-    X_test=env_test,
-    y_test=env_test["data"]["Volume"].reset_index(drop=True),
-)
-report
-
-# %%
-report.metrics.summarize()
-
-# %%
-report.metrics.prediction_error()
-# %%
+best_report = EstimatorReport(report_hgb, data=env_test)
+best_report.get_predictions() # to send to kaggle for the competition.
