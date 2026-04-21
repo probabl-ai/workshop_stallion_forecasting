@@ -20,7 +20,7 @@ class Splitter:
 
     def split(self, X, y=None, groups=None):
         min_train_months = 6
-        ym = pd.to_datetime(X["YearMonth"])
+        ym = pd.to_datetime(X["YearMonth"], format="%Y%m")
         start = ym.min() + pd.DateOffset(months=min_train_months)
         test_months = pd.date_range(start, ym.max(), freq="MS")[:: self.interval]
         for test_mo in test_months:
