@@ -21,10 +21,7 @@
 # price, discounts, industry-wide volume, weather, demographics, and special-day flags.
 
 # %%
-import numpy as np
 import pandas as pd
-
-# %%
 DATA = "data/train/"
 
 historical = pd.read_csv(DATA + "historical_volume.csv")
@@ -34,6 +31,8 @@ industry = pd.read_csv(DATA + "industry_volume.csv")
 soda = pd.read_csv(DATA + "industry_soda_sales.csv")
 weather = pd.read_csv(DATA + "weather.csv")
 demographics = pd.read_csv(DATA + "demographics.csv")
+# provided data is for 2017 which would not be available in reality, we just
+# use it for illustration assuming that it is quite stable over a few years' range.
 
 # Merge on (Agency, SKU, YearMonth)
 df = historical.merge(price_promo, on=["Agency", "SKU", "YearMonth"], how="left")
@@ -64,14 +63,75 @@ df = df.merge(demographics, on="Agency", how="left")
 from skrub import TableReport
 TableReport(df)
 
+# %%
+df["YearMonth"] = pd.to_datetime(df["YearMonth"].astype(str), format="%Y%m")
+
+# %%
+import plotly.express as px
+
+for agency, df_ in df.groupby("Agency"):
+    fig = px.line(df_, x="YearMonth", y="Volume", color="SKU", title=agency)
+    fig.show()
+
 # %% [markdown]
 # ---
 # ## 3 · Feature engineering, build & train pipelines
 
 # %%
-from skrub import TableVectorizer, tabular_pipeline
-pipeline = tabular_pipeline("regression")
-pipeline
+def add_demographics(query, data_dir="data/train/"):
+    demographics = pd.read_csv(data_dir + "demographics.csv")
+    return query.merge(demographics, on="Agency", how="left")
+
+# %%
+import skrub
+from helpers import add_lagged_volume
+from sklearn.dummy import DummyRegressor
+
+def sort_data(df):
+    return df.sort_values(by = ["Agency", "SKU", "YearMonth"]).reset_index(drop=True)
+
+def make_data_op(regressor=DummyRegressor()):
+    """Build a skrub DataOp pipeline for walk-forward volume forecasting.
+
+    The pipeline:
+      1. Sorts the data by Agency / SKU / YearMonth.
+      2. Marks YearMonth / Agency / SKU as X and Volume as y.
+      3. Adds lagged-volume features (uses the full historical dataset so
+         lags are always computed from complete past data, even in CV).
+      4. Adds demographic covariates loaded from ``data_dir``.
+      5. Vectorises with TableVectorizer.
+      6. Applys the regressor.
+
+    Environment keys expected at evaluation time:
+        ``data``     – DataFrame with YearMonth, Agency, SKU, Volume.
+        ``data_dir`` – Path (str or Path) to the folder containing CSV files.
+    """
+    data = skrub.var("data").skb.apply_func(sort_data)
+    X = data[["YearMonth", "Agency", "SKU"]].skb.mark_as_X(cv=Splitter())
+    y = data["Volume"].skb.mark_as_y()
+    data_dir = skrub.var("data_dir")
+    features = (
+        X.skb.apply_func(add_lagged_volume, data)
+        .skb.apply_func(add_demographics, data_dir)
+        .skb.apply(
+            skrub.TableVectorizer(
+                datetime=skrub.DatetimeEncoder(resolution="month"),
+                low_cardinality=skrub.ToCategorical(),
+                cardinality_threshold=100,
+            )
+        )
+    )
+
+    return features.skb.apply(regressor, y=y)
+
+# %%
+from sklearn.ensemble import HistGradientBoostingRegressor
+# DataOp pipeline: sort → lag features → demographics → TableVectorizer → regressor.
+# ``data`` holds the full history so lags are always computed from complete past data,
+# even inside a CV fold where X is restricted to the training rows.
+data_op_hgb = make_data_op(HistGradientBoostingRegressor(categorical_features="from_dtype"))
+data_op_hgb
+
 
 # %% [markdown]
 # ---
@@ -79,18 +139,62 @@ pipeline
 # with Cross Validation
 
 # %%
-from skore import CrossValidationReport, evaluate
+from helpers import Splitter
 
-# %% [markdown]
-# side by side benchmark, comparison of options (one or two models, with a baseline)
-
-# %%
-from skore import ComparisonReport
-
-
-# %% [markdown]
-# Evaluation of chosen model
-# EstimatorReport of a model trained on the whole training set, and tested on Jan 18
+splitter = Splitter()
 
 # %%
+env = {
+    "data": pd.read_csv(DATA + "historical_volume.csv"),
+    "data_dir": DATA,
+}
+
+# %% 
+import skore
+
+report_hgb = skore.evaluate(data_op_hgb, data = env, splitter = splitter)
+report_hgb
+# this cell takes a long time: for cross validation, and for metrics computation.
+
+# %% 
+data_op_dummy = make_data_op()
+
+report_dummy = skore.evaluate(data_op_dummy, data = env, splitter = splitter)
+report_dummy
+# this cell takes a long time: for cross validation, and for metrics computation.
+
+# %%
+from helpers import PrevMonth
+
+data_op_next_month = make_data_op(PrevMonth())
+report_next_month = skore.evaluate(data_op_next_month, data = env, splitter = splitter)
+report_next_month
+# this cell takes a long time: for cross validation, and for metrics computation.
+
+# %% 
+# let's compare these
 from skore import ComparisonReport
+comparison = ComparisonReport(
+    {
+        "hgb": report_hgb,
+        "prev_month": report_next_month,
+        "dummy": report_dummy,
+    },
+    metrics=["neg_mean_absolute_error"],
+)
+comparison
+
+# %%
+# apply the best pipeline to test set
+# to fill.
+from skore import EstimatorReport
+
+# how I would naturally do it.
+DATA_TEST = "data/test/"
+env_test = {
+    "data": pd.read_csv(DATA + "historical_volume.csv"),
+    "data_dir": DATA_TEST,
+}
+
+best_report = EstimatorReport(report_hgb, data=env_test)
+best_report.get_predictions() # to send to kaggle for the competition.
